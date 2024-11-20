@@ -3,59 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexagon Tile Game</title>
+    <title>Diamond Grid Game</title>
     <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-        }
         #board {
             display: grid;
-            grid-template-columns: repeat(10, 60px);
-            grid-template-rows: repeat(10, 52px);
+            grid-template-columns: repeat(6, 50px);
             gap: 2px;
+            justify-content: center;
+            margin: 20px auto;
         }
-        .hex {
-            width: 60px;
-            height: 52px;
-            background-color: lightgray;
-            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            transition: background-color 0.2s;
+        .cell {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
         }
+        .red { background-color: red; }
+        .yellow { background-color: yellow; }
+        .blue { background-color: blue; }
+        .green { background-color: green; }
     </style>
 </head>
 <body>
+    <h1>Diamond Grid Game</h1>
+    <div id="info"></div>
+    <div id="board"></div>
+    <div id="scores"></div>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        let currentPlayer = null;
 
-<div id="board">
-    <!-- Hexagonal tiles will be added here on clicks -->
-</div>
-
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-    $(document).ready(function() {
-        // Create an empty board of hex tiles
-        for (let i = 0; i < 100; i++) {
-            const hexTile = $('<div class="hex"></div>');
-            hexTile.data("clicked", false);  // Track if a tile has been clicked
-            $('#board').append(hexTile);
+        function renderBoard(board) {
+            const boardDiv = document.getElementById('board');
+            boardDiv.innerHTML = '';
+            board.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.classList.add('cell');
+                    if (cell) cellDiv.classList.add(cell);
+                    cellDiv.dataset.row = rowIndex;
+                    cellDiv.dataset.col = colIndex;
+                    cellDiv.addEventListener('click', () => makeMove(rowIndex, colIndex));
+                    boardDiv.appendChild(cellDiv);
+                });
+            });
         }
 
-        // Add color to hex tiles on click
-        $('#board').on('click', '.hex', function() {
-            if (!$(this).data("clicked")) {  // Only allow one click per tile
-                $.getJSON('/add_tile', function(data) {
-                    $(this).css('background-color', data.color);
-                    $(this).data("clicked", true);  // Mark as clicked
-                }.bind(this));
-            }
-        });
-    });
-</script>
+        function makeMove(row, col) {
+            socket.emit('make_move', { player: currentPlayer, row, col });
+        }
 
+        socket.on('update_board', ({ board }) => renderBoard(board));
+        socket.on('update_scores', ({ scores }) => {
+            const scoresDiv = document.getElementById('scores');
+            scoresDiv.innerHTML = Object.entries(scores).map(([player, info]) =>
+                `Player ${player} (${info.color}): ${info.score} points`
+            ).join('<br>');
+        });
+        socket.on('next_turn', ({ current_player }) => {
+            currentPlayer = current_player;
+            document.getElementById('info').innerText = `Player ${currentPlayer}'s turn`;
+        });
+        socket.on('game_over', ({ winner }) => alert(`Player ${winner} wins!`));
+        socket.on('reset_board', ({ board }) => renderBoard(board));
+        socket.on('invalid_move', ({ message }) => alert(message));
+
+        socket.emit('join_game');
+    </script>
 </body>
 </html>
